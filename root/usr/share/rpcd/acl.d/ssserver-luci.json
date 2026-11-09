@@ -1,0 +1,27 @@
+{
+	"ssserver-luci": {
+		"description": "Shadowsocks 服务端管理（配置、启停、日志）",
+		"read": {
+			"ubus": {
+				"service": [ "list" ],
+				"uci": [ "get", "changes" ]
+			},
+			"uci": [ "ssserver" ],
+			"file": {
+				"/etc/init.d/ssserver": [ "exec" ],
+				"/sbin/logread": [ "exec" ],
+				"/bin/logread": [ "exec" ],
+				"/usr/bin/ssserver": [ "exec" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"uci": [ "set", "delete", "order", "apply", "confirm" ]
+			},
+			"uci": [ "ssserver" ],
+			"file": {
+				"/etc/init.d/ssserver": [ "exec" ]
+			}
+		}
+	}
+}

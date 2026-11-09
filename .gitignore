@@ -1,0 +1,7 @@
+.ref/
+.tmp-*/
+dist/
+files.txt
+*.ipk
+*.tar.zst
+.f.js

@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# 首次安装时生成随机密码，并收紧配置文件权限。
+# 已经存在密码时不覆盖，避免升级时清掉用户配置。
+#
+
+[ -n "$IPKG_INSTROOT" ] && exit 0
+
+CONF="/etc/config/ssserver"
+
+[ -f "$CONF" ] || exit 0
+
+pw="$(uci -q get ssserver.main.password)"
+
+if [ -z "$pw" ]; then
+	pw="$(head -c 64 /dev/urandom | md5sum | cut -c1-32)"
+	if [ -n "$pw" ]; then
+		uci -q set "ssserver.main.password=$pw"
+		uci -q commit ssserver
+		logger -t ssserver-luci "已生成随机连接密码，请在 LuCI 中查看"
+	fi
+fi
+
+chmod 600 "$CONF"
+
+exit 0

@@ -1,0 +1,109 @@
+name: build-ipk
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SDK_VERSION: "24.10.5"
+  SDK_URL: "https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+  PKG_DIR: "ssserver-luci"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libncurses-dev zlib1g-dev gawk git gettext \
+            libssl-dev xsltproc rsync wget unzip zstd python3
+
+      - name: Lint sources
+        run: sh tools/lint.sh
+
+      - name: Cache SDK tarball
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sdk.tar.zst
+          key: openwrt-sdk-${{ env.SDK_VERSION }}-x86-64-v1
+
+      - name: Fetch SDK
+        run: |
+          set -euo pipefail
+          if [ ! -s "$RUNNER_TEMP/sdk.tar.zst" ]; then
+            curl -fL --retry 3 -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
+          fi
+          mkdir -p "$RUNNER_TEMP/sdk"
+          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk"
+          ls -d "$RUNNER_TEMP"/sdk/openwrt-sdk-*
+
+      - name: Build package
+        run: |
+          set -euo pipefail
+          SDK="$(echo "$RUNNER_TEMP"/sdk/openwrt-sdk-*)"
+          DEST="$SDK/package/$PKG_DIR"
+
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          tar -cf - --exclude=.git --exclude=.github --exclude=dist --exclude='.tmp-*' --exclude='*.ipk' . \
+            | tar -xf - -C "$DEST"
+
+          cd "$SDK"
+          make defconfig
+          make "package/$PKG_DIR/compile" V=s -j"$(nproc)"
+
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp bin/packages/*/*/ssserver-luci*.ipk "$GITHUB_WORKSPACE/dist/"
+          ls -l "$GITHUB_WORKSPACE/dist"
+
+      - name: Smoke test ipk contents
+        run: |
+          set -euo pipefail
+          ipk="$(ls dist/*.ipk | head -n1)"
+          echo "== $ipk"
+          tar tzf "$ipk"
+          tar xzOf "$ipk" ./data.tar.gz | tar tz | sort > files.txt
+          cat files.txt
+          for need in \
+            "./etc/init.d/ssserver" \
+            "./etc/config/ssserver" \
+            "./etc/uci-defaults/90-ssserver-luci" \
+            "./usr/share/luci/menu.d/ssserver-luci.json" \
+            "./usr/share/rpcd/acl.d/ssserver-luci.json" \
+            "./www/luci-static/resources/view/ssserver/overview.js" \
+            "./www/luci-static/resources/view/ssserver/settings.js" \
+            "./www/luci-static/resources/view/ssserver/advanced.js"
+          do
+            grep -qxF "$need" files.txt || { echo "缺少文件: $need"; exit 1; }
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssserver-luci-ipk
+          path: dist/*.ipk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.ipk
+          generate_release_notes: true

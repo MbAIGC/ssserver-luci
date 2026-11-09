@@ -1,0 +1,53 @@
+{
+	"admin/services/ssserver": {
+		"title": "Shadowsocks 服务端",
+		"order": 80,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [
+				"ssserver-luci"
+			]
+		}
+	},
+	"admin/services/ssserver/overview": {
+		"title": "运行概览",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "ssserver/overview"
+		},
+		"depends": {
+			"acl": [
+				"ssserver-luci"
+			]
+		}
+	},
+	"admin/services/ssserver/settings": {
+		"title": "服务器配置",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "ssserver/settings"
+		},
+		"depends": {
+			"acl": [
+				"ssserver-luci"
+			]
+		}
+	},
+	"admin/services/ssserver/advanced": {
+		"title": "高级设置",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "ssserver/advanced"
+		},
+		"depends": {
+			"acl": [
+				"ssserver-luci"
+			]
+		}
+	}
+}
