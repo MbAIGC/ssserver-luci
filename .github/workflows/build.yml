@@ -17,10 +17,9 @@ concurrency:
 env:
   SDK_VERSION: "24.10.5"
   SDK_URL: "https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
-  PKG_DIR: "ssserver-luci"
+  PKG_DIRS: "ssserver-luci luci-app-ddns-go"
 
 jobs:
-  # 24.10.x（opkg）→ .ipk
   ipk:
     runs-on: ubuntu-24.04
 
@@ -41,47 +40,61 @@ jobs:
       - name: Cache SDK tarball
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/sdk-ipk.tar.zst
+          path: ${{ runner.temp }}/sdk.tar.zst
           key: openwrt-sdk-${{ env.SDK_VERSION }}-x86-64-v1
 
       - name: Fetch SDK
         run: |
           set -euo pipefail
-          if [ ! -s "$RUNNER_TEMP/sdk-ipk.tar.zst" ]; then
-            curl -fL --retry 3 -o "$RUNNER_TEMP/sdk-ipk.tar.zst" "$SDK_URL"
+          if [ ! -s "$RUNNER_TEMP/sdk.tar.zst" ]; then
+            curl -fL --retry 3 -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
           fi
-          mkdir -p "$RUNNER_TEMP/sdk-ipk"
-          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk-ipk.tar.zst" -C "$RUNNER_TEMP/sdk-ipk"
-          ls -d "$RUNNER_TEMP"/sdk-ipk/openwrt-sdk-*
+          mkdir -p "$RUNNER_TEMP/sdk"
+          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk"
+          ls -d "$RUNNER_TEMP"/sdk/openwrt-sdk-*
 
-      - name: Build ipk
+      - name: Build packages
         run: |
           set -euo pipefail
-          SDK="$(echo "$RUNNER_TEMP"/sdk-ipk/openwrt-sdk-*)"
-          DEST="$SDK/package/$PKG_DIR"
+          SDK="$(echo "$RUNNER_TEMP"/sdk/openwrt-sdk-*)"
 
-          rm -rf "$DEST"
-          mkdir -p "$DEST"
-          tar -cf - --exclude=.git --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' -C "$PKG_DIR" . \
-            | tar -xf - -C "$DEST"
+          for d in $PKG_DIRS; do
+            DEST="$SDK/package/$d"
+            rm -rf "$DEST"
+            mkdir -p "$DEST"
+            tar -cf - --exclude=.git -C "$d" . | tar -xf - -C "$DEST"
+            echo "== staged $d"
+          done
 
           cd "$SDK"
           make defconfig
-          make "package/$PKG_DIR/compile" V=s -j"$(nproc)"
+
+          for d in $PKG_DIRS; do
+            echo "== build $d"
+            make "package/$d/compile" V=s -j"$(nproc)"
+          done
 
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          cp bin/packages/*/*/ssserver-luci*.ipk "$GITHUB_WORKSPACE/dist/"
+          for d in $PKG_DIRS; do
+            cp bin/packages/*/*/"$d"_*.ipk "$GITHUB_WORKSPACE/dist/"
+          done
           ls -l "$GITHUB_WORKSPACE/dist"
 
       - name: Smoke test ipk contents
         run: |
           set -euo pipefail
-          ipk="$(ls dist/*.ipk | head -n1)"
-          echo "== $ipk"
-          tar tzf "$ipk"
-          tar xzOf "$ipk" ./data.tar.gz | tar tz | sort > files.txt
-          cat files.txt
-          for need in \
+
+          check() {
+            ipk="$1"; shift
+            echo "== $ipk"
+            tar xzOf "$ipk" ./data.tar.gz | tar tz | sort > files.txt
+            cat files.txt
+            for need in "$@"; do
+              grep -qxF "$need" files.txt || { echo "缺少文件: $need"; exit 1; }
+            done
+          }
+
+          check "$(ls dist/ssserver-luci_*.ipk)" \
             "./etc/init.d/ssserver" \
             "./etc/config/ssserver" \
             "./etc/uci-defaults/90-ssserver-luci" \
@@ -89,8 +102,18 @@ jobs:
             "./usr/lib/lua/luci/model/cbi/ssserver/settings.lua" \
             "./usr/lib/lua/luci/model/cbi/ssserver/advanced.lua" \
             "./usr/lib/lua/luci/view/ssserver/overview.htm"
-          do
-            grep -qxF "$need" files.txt || { echo "缺少文件: $need"; exit 1; }
+
+          check "$(ls dist/luci-app-ddns-go_*.ipk)" \
+            "./etc/uci-defaults/99-luci-ddns-go" \
+            "./usr/lib/lua/luci/controller/ddns_go.lua" \
+            "./usr/lib/lua/luci/model/cbi/ddns_go/config.lua" \
+            "./usr/lib/lua/luci/view/ddns_go/panel.htm" \
+            "./usr/lib/lua/luci/view/ddns_go/log.htm"
+
+          echo "== 依赖检查"
+          for ipk in dist/*.ipk; do
+            echo -n "$(basename "$ipk"): "
+            tar xzOf "$ipk" ./control.tar.gz | tar xzO ./control | grep '^Depends:'
           done
 
       - name: Upload ipk
@@ -101,64 +124,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # snapshot（apk）→ .apk
-  apk:
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup host tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential libncurses-dev zlib1g-dev gawk git gettext \
-            libssl-dev xsltproc rsync wget unzip zstd python3 lua5.1
-
-      - name: Fetch snapshot SDK
-        run: |
-          set -euo pipefail
-          base="https://downloads.openwrt.org/snapshots/targets/x86/64/"
-          name="$(curl -fsSL "$base" | grep -o 'openwrt-sdk-x86-64[^"<]*\.tar\.zst' | head -n1)"
-          [ -n "$name" ] || { echo "未找到 snapshot SDK"; exit 1; }
-          echo "SDK: $name"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/sdk-apk.tar.zst" "$base$name"
-          mkdir -p "$RUNNER_TEMP/sdk-apk"
-          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk-apk.tar.zst" -C "$RUNNER_TEMP/sdk-apk"
-          ls -d "$RUNNER_TEMP"/sdk-apk/openwrt-sdk-*
-
-      - name: Build apk
-        run: |
-          set -euo pipefail
-          SDK="$(echo "$RUNNER_TEMP"/sdk-apk/openwrt-sdk-*)"
-          DEST="$SDK/package/$PKG_DIR"
-
-          rm -rf "$DEST"
-          mkdir -p "$DEST"
-          tar -cf - --exclude=.git --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' \
-            -C "$PKG_DIR" . | tar -xf - -C "$DEST"
-
-          cd "$SDK"
-          make defconfig
-          make "package/$PKG_DIR/compile" V=s -j"$(nproc)"
-
-          mkdir -p "$GITHUB_WORKSPACE/dist-apk"
-          find bin -name 'ssserver-luci*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/dist-apk/" \;
-          ls -l "$GITHUB_WORKSPACE/dist-apk"
-          test -n "$(ls -A "$GITHUB_WORKSPACE/dist-apk")"
-
-      - name: Upload apk
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: dist-apk/*.apk
-          if-no-files-found: error
-          retention-days: 30
-
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ ipk, apk ]
+    needs: [ ipk ]
     runs-on: ubuntu-24.04
 
     steps:

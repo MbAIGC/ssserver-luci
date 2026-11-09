@@ -1,0 +1,42 @@
+<%
+-- 动作处理放在 header 之前，保证 redirect 生效
+local http       = require "luci.http"
+local sys        = require "luci.sys"
+local dispatcher = require "luci.dispatcher"
+
+local action = http.formvalue("action")
+if action then
+	if action == "clear" then
+		-- 与上游一致：重启 log 服务清空 syslog（会影响所有服务的日志）
+		sys.call("/etc/init.d/log restart >/dev/null 2>&1")
+	end
+	http.redirect(dispatcher.build_url("admin/services/ddns-go/log"))
+	return
+end
+%>
+<%+header%>
+
+<%
+local log = sys.exec("logread 2>/dev/null | grep -i 'ddns-go' | tail -n 200") or ""
+-%>
+
+<h2 name="content"><%:DDNS-GO 日志%></h2>
+
+<div class="cbi-section">
+	<p class="cbi-section-descr">
+		<%:来源：系统 syslog 中包含 ddns-go 的最近 200 行（含 procd 捕获的进程输出）。%>
+	</p>
+
+	<pre style="max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;padding:8px;border-radius:4px;background:rgba(127,127,127,0.08)"><%=pcdata(log ~= "" and log or translate("（暂无相关日志）"))%></pre>
+
+	<form method="post" action="<%=dispatcher.build_url("admin/services/ddns-go/log")%>">
+		<input type="hidden" name="token" value="<%=token%>" />
+		<div class="cbi-page-actions">
+			<input type="submit" class="cbi-button cbi-button-action" value="<%:刷新%>" />
+			<button type="submit" name="action" value="clear" class="cbi-button cbi-button-reset"
+				onclick="return confirm('<%:确定清空系统日志？这会影响所有服务的日志。%>')"><%:清空系统日志%></button>
+		</div>
+	</form>
+</div>
+
+<%+footer%>

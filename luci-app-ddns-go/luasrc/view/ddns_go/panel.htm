@@ -1,0 +1,50 @@
+<%+header%>
+
+<%
+local uci  = require "luci.model.uci".cursor()
+local sys  = require "luci.sys"
+local http = require "luci.http"
+
+local port  = uci:get("ddns-go", "config", "port") or "9876"
+local noweb = uci:get("ddns-go", "config", "noweb")
+local pid   = (sys.exec("pidof ddns-go 2>/dev/null") or ""):match("%d+")
+
+local host = (http.getenv("HTTP_HOST") or "127.0.0.1"):gsub(":%d+$", "")
+local url  = string.format("http://%s:%s", host, port)
+local https = (http.getenv("HTTPS") == "on")
+-%>
+
+<h2 name="content"><%:DDNS-GO 控制面板%></h2>
+
+<% if not pid then %>
+	<div class="cbi-section">
+		<p style="padding:1.2em 0;color:#c62828;font-weight:bold"><%:DDNS-GO 服务未运行。%></p>
+		<p><%:请先到「基础设置」勾选“启用”并保存，或手动执行 /etc/init.d/ddns-go start。%></p>
+	</div>
+<% elseif noweb == "1" then %>
+	<div class="cbi-section">
+		<p style="padding:1.2em 0;color:#c62828;font-weight:bold"><%:已禁用 Web 服务。%></p>
+		<p><%:当前启用了“禁用 Web 服务”，因此没有内嵌面板。取消勾选后保存即可恢复。%></p>
+	</div>
+<% elseif https then %>
+	<div class="cbi-section">
+		<p style="padding:1em 0"><%:浏览器会拦截 HTTPS 页面里内嵌的 HTTP 内容，请在新窗口打开面板。%></p>
+		<p><a class="cbi-button cbi-button-apply" href="<%=pcdata(url)%>" target="_blank"><%:打开 Web 面板%></a></p>
+	</div>
+<% else %>
+	<div class="cbi-section">
+		<div style="margin-bottom:8px">
+			<a class="cbi-button cbi-button-action" href="<%=pcdata(url)%>" target="_blank"><%:在新窗口打开%></a>
+			<span style="margin-left:8px;color:#666"><%=pcdata(url)%></span>
+		</div>
+		<iframe src="<%=pcdata(url)%>" style="width:100%;min-height:78vh;border:1px solid rgba(127,127,127,0.25);border-radius:4px"></iframe>
+	</div>
+<% end %>
+
+<div class="cbi-section">
+	<p class="cbi-section-descr">
+		<%:面板地址取自「基础设置」里的端口。账号密码在面板内修改；忘记密码时可在「基础设置」重置为 admin12345。%>
+	</p>
+</div>
+
+<%+footer%>

@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# 安装后清掉 Lua LuCI 的菜单缓存并重启 rpcd/uhttpd，
+# 否则新加的 controller 可能不会立刻出现在菜单里。
+#
+
+[ -n "$IPKG_INSTROOT" ] && exit 0
+
+rm -f /tmp/luci-indexcache
+/etc/init.d/rpcd restart >/dev/null 2>&1
+[ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
+
+exit 0

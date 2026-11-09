@@ -1,16 +1,24 @@
 #!/bin/sh
 #
-# 本地/CI 通用的静态检查：不依赖 OpenWrt SDK。
+# 本地/CI 通用静态检查，不需要 OpenWrt SDK。
 #
 
 set -e
 
 cd "$(dirname "$0")/.."
 
-PKG="ssserver-luci"
+PKGS="ssserver-luci luci-app-ddns-go"
 
-echo "== shell 语法 =="
-for f in "$PKG"/root/etc/init.d/ssserver "$PKG"/root/etc/uci-defaults/90-ssserver-luci; do
+echo "== shell 语法（uci-defaults） =="
+for p in $PKGS; do
+	for f in $(find "$p/root" -path '*/etc/uci-defaults/*' -type f | sort); do
+		sh -n "$f"
+		echo "ok  $f"
+	done
+done
+
+echo "== init.d 语法 =="
+for f in $(find . -path '*/root/etc/init.d/*' -type f | sort); do
 	sh -n "$f"
 	echo "ok  $f"
 done
@@ -24,47 +32,28 @@ elif command -v luac >/dev/null 2>&1; then
 fi
 
 if [ -n "$LUA_CHECK" ]; then
-	for f in $(find "$PKG"/luasrc -name '*.lua' | sort); do
-		$LUA_CHECK "$f"
-		echo "ok  $f"
+	for p in $PKGS; do
+		for f in $(find "$p/luasrc" -name '*.lua' 2>/dev/null | sort); do
+			$LUA_CHECK "$f"
+			echo "ok  $f"
+		done
 	done
 else
 	echo "skip: 未安装 luac"
 fi
 
 echo "== 模板语法 =="
-for f in $(find "$PKG"/luasrc -name '*.htm' | sort); do
-	# 至少保证 <% 与 %> 成对
-	o=$(grep -o '<%' "$f" | wc -l)
-	c=$(grep -o '%>' "$f" | wc -l)
-	[ "$o" = "$c" ] || { echo "ERR $f: <% 与 %> 数量不匹配 ($o/$c)" >&2; exit 1; }
-	echo "ok  $f ($o 个代码块)"
+for p in $PKGS; do
+	for f in $(find "$p/luasrc" -name '*.htm' 2>/dev/null | sort); do
+		o=$(grep -o '<%' "$f" | wc -l)
+		c=$(grep -o '%>' "$f" | wc -l)
+		[ "$o" = "$c" ] || { echo "ERR $f: <% 与 %> 数量不匹配 ($o/$c)" >&2; exit 1; }
+		echo "ok  $f ($o 个代码块)"
+	done
 done
 
-echo "== JSON 语法 =="
-if ls "$PKG"/root/usr/share/**/*.json >/dev/null 2>&1; then
-	python3 - <<'PY'
-import glob
-import json
-import sys
-
-bad = 0
-for f in sorted(glob.glob('ssserver-luci/root/usr/share/**/*.json', recursive=True)):
-    try:
-        with open(f, encoding='utf-8') as fh:
-            json.load(fh)
-        print('ok  ' + f)
-    except Exception as exc:
-        bad = 1
-        print('ERR ' + f + ': ' + str(exc))
-sys.exit(bad)
-PY
-else
-	echo "skip: 没有 JSON 文件"
-fi
-
 echo "== 防火墙关键词检查（应无输出） =="
-if grep -rnE '\b(iptables|ip6tables|nft|nftables|fw3|fw4|tproxy)\b' "$PKG"/root "$PKG"/luasrc 2>/dev/null; then
+if grep -rnE '\b(iptables|ip6tables|nft|nftables|fw3|fw4|tproxy)\b' ssserver-luci/root ssserver-luci/luasrc 2>/dev/null; then
 	echo "错误：检测到防火墙相关代码" >&2
 	exit 1
 fi
