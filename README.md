@@ -76,8 +76,8 @@ ssserver --version
 
 | 固件 | 产物 | 安装 |
 |---|---|---|
-| 24.10.x（opkg） | `ssserver-luci_1.0.0-r1_all.ipk` | `opkg install /tmp/*.ipk` |
-| snapshot（apk） | `ssserver-luci-1.0.0-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
+| 24.10.x（opkg） | `ssserver-luci_1.0.1-r1_all.ipk` | `opkg install /tmp/*.ipk` |
+| snapshot（apk） | `ssserver-luci-1.0.1-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
 
 判断方法：设备上 `command -v apk` 有输出就是 snapshot，`command -v opkg` 有输出就是 24.10。
 
@@ -226,8 +226,8 @@ sh tools/test-initd.sh  # 配置校验与 JSON 生成自测（无需 OpenWrt）
 
 CI 有两条流水线：
 
-- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.0-r1_all.ipk`
-- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.0-r1.apk`
+- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.1-r1_all.ipk`
+- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.1-r1.apk`
 
 包都是 `all` 架构，与 SDK 的 target 无关，x86_64/arm 设备都能装。如需换 SDK 版本，改 `.github/workflows/build.yml` 里的
 `SDK_VERSION` / `SDK_URL` 两处；换了 SDK 记得同步改缓存 key，否则会命中旧 tarball。

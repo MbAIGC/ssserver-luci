@@ -11,7 +11,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ssserver-luci
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 
 PKG_LICENSE:=GPL-3.0
@@ -80,7 +80,8 @@ define Package/$(PKG_NAME)/postinst
 	[ -x /etc/uci-defaults/90-ssserver-luci ] && /etc/uci-defaults/90-ssserver-luci >/dev/null 2>&1
 	rm -f /tmp/luci-indexcache.*
 	rm -rf /tmp/luci-modulecache/
-	/etc/init.d/rpcd reload >/dev/null 2>&1
+	/etc/init.d/rpcd restart >/dev/null 2>&1
+	[ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
 	if [ -x /etc/rc.d/S95ssserver ]; then
 		/etc/init.d/ssserver start >/dev/null 2>&1
 	fi

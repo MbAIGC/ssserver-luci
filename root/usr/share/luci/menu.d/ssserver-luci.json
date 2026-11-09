@@ -4,11 +4,6 @@
 		"order": 80,
 		"action": {
 			"type": "firstchild"
-		},
-		"depends": {
-			"acl": [
-				"ssserver-luci"
-			]
 		}
 	},
 	"admin/services/ssserver/overview": {
@@ -17,11 +12,6 @@
 		"action": {
 			"type": "view",
 			"path": "ssserver/overview"
-		},
-		"depends": {
-			"acl": [
-				"ssserver-luci"
-			]
 		}
 	},
 	"admin/services/ssserver/settings": {
@@ -30,11 +20,6 @@
 		"action": {
 			"type": "view",
 			"path": "ssserver/settings"
-		},
-		"depends": {
-			"acl": [
-				"ssserver-luci"
-			]
 		}
 	},
 	"admin/services/ssserver/advanced": {
@@ -43,11 +28,6 @@
 		"action": {
 			"type": "view",
 			"path": "ssserver/advanced"
-		},
-		"depends": {
-			"acl": [
-				"ssserver-luci"
-			]
 		}
 	}
 }
