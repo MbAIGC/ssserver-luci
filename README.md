@@ -74,21 +74,32 @@ DDNS-GO 的界面，改造自 [sirpdboy/luci-app-ddns-go](https://github.com/sir
 
 依赖系统中的 `ddns-go` 包（上游 Release 里的 `ddns-go_*_x86_64.ipk`），本仓库不构建它。
 
-## 构建
+## 构建与发布
 
-CI 用 24.10.5 的 x86-64 SDK，一次构建两个包（都是 `all` 架构，任意 24.10.x 可装）：
+CI 用 24.10.5 的 x86-64 SDK。两个包都是 `all` 架构，任意 24.10.x 都能装。
+
+**每个插件按自己的版本单独发 Release**，tag 名必须等于 `<PKG_NAME>-v<PKG_VERSION>`：
 
 ```sh
-# 推送即构建；打 tag 自动发 Release
-git tag v1.1.0 && git push origin master --tags
+# 只发 ssserver-luci 1.0.4
+sed -i 's/^PKG_VERSION:=.*/PKG_VERSION:=1.0.4/' ssserver-luci/Makefile
+git commit -am "ssserver-luci 1.0.4"
+git tag ssserver-luci-v1.0.4
+git push origin master ssserver-luci-v1.0.4
+
+# 只发 luci-app-ddns-go 1.7.0
+sed -i 's/^PKG_VERSION:=.*/PKG_VERSION:=1.7.0/' luci-app-ddns-go/Makefile
+git commit -am "luci-app-ddns-go 1.7.0"
+git tag luci-app-ddns-go-v1.7.0
+git push origin master luci-app-ddns-go-v1.7.0
 ```
 
-产物：
+结果：
 
-```
-ssserver-luci_1.0.3-r1_all.ipk
-luci-app-ddns-go_1.6.9-r1_all.ipk
-```
+- Release 标题 = `ssserver-luci 1.0.4` / `luci-app-ddns-go 1.7.0`
+- 每个 Release 只挂自己那个 IPK
+- 打 tag 时只构建该插件；普通 push 到 `main`/`master` 会构建两个包并上传 Artifacts，但不发 Release
+- tag 名对不上任何包时，只构建、不发布
 
 本地检查：
 

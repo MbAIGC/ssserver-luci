@@ -3,7 +3,7 @@ name: build
 on:
   push:
     branches: [ main, master ]
-    tags: [ 'v*' ]
+    tags: [ '*-v*' ]
   pull_request:
   workflow_dispatch:
 
@@ -17,10 +17,65 @@ concurrency:
 env:
   SDK_VERSION: "24.10.5"
   SDK_URL: "https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
-  PKG_DIRS: "ssserver-luci luci-app-ddns-go"
+  ALL_PKG_DIRS: "ssserver-luci luci-app-ddns-go"
 
 jobs:
+  # 决定这次构建哪些包、要不要发 Release
+  # tag 形如 <PKG_NAME>-v<PKG_VERSION> 时才发布，且只发布该包
+  meta:
+    runs-on: ubuntu-24.04
+    outputs:
+      build_dirs: ${{ steps.m.outputs.build_dirs }}
+      release_pkg: ${{ steps.m.outputs.release_pkg }}
+      release_title: ${{ steps.m.outputs.release_title }}
+      release_tag: ${{ steps.m.outputs.release_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target packages
+        id: m
+        run: |
+          set -euo pipefail
+
+          tag=""
+          case "$GITHUB_REF" in
+            refs/tags/*) tag="${GITHUB_REF#refs/tags/}" ;;
+          esac
+
+          tagged_pkg=""
+          title=""
+
+          if [ -n "$tag" ]; then
+            for d in $ALL_PKG_DIRS; do
+              name=$(sed -n 's/^PKG_NAME:=//p' "$d/Makefile")
+              ver=$(sed -n 's/^PKG_VERSION:=//p' "$d/Makefile")
+              rel=$(sed -n 's/^PKG_RELEASE:=//p' "$d/Makefile")
+
+              if [ "$tag" = "${name}-v${ver}" ] || [ "$tag" = "${name}-v${ver}-r${rel}" ]; then
+                tagged_pkg="$d"
+                title="${name} ${ver}"
+              fi
+            done
+          fi
+
+          if [ -n "$tagged_pkg" ]; then
+            build_dirs="$tagged_pkg"
+          else
+            build_dirs="$ALL_PKG_DIRS"
+          fi
+
+          {
+            echo "build_dirs=$build_dirs"
+            echo "release_pkg=$tagged_pkg"
+            echo "release_title=$title"
+            echo "release_tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "tag='$tag' build_dirs='$build_dirs' release_pkg='$tagged_pkg'"
+
   ipk:
+    needs: meta
     runs-on: ubuntu-24.04
 
     steps:
@@ -54,6 +109,8 @@ jobs:
           ls -d "$RUNNER_TEMP"/sdk/openwrt-sdk-*
 
       - name: Build packages
+        env:
+          PKG_DIRS: ${{ needs.meta.outputs.build_dirs }}
         run: |
           set -euo pipefail
           SDK="$(echo "$RUNNER_TEMP"/sdk/openwrt-sdk-*)"
@@ -92,28 +149,31 @@ jobs:
             for need in "$@"; do
               grep -qxF "$need" files.txt || { echo "缺少文件: $need"; exit 1; }
             done
+            echo -n "   Depends: "
+            tar xzOf "$ipk" ./control.tar.gz | tar xzO ./control | sed -n 's/^Depends: //p'
           }
 
-          check "$(ls dist/ssserver-luci_*.ipk)" \
-            "./etc/init.d/ssserver" \
-            "./etc/config/ssserver" \
-            "./etc/uci-defaults/90-ssserver-luci" \
-            "./usr/lib/lua/luci/controller/ssserver.lua" \
-            "./usr/lib/lua/luci/model/cbi/ssserver/settings.lua" \
-            "./usr/lib/lua/luci/model/cbi/ssserver/advanced.lua" \
-            "./usr/lib/lua/luci/view/ssserver/overview.htm"
-
-          check "$(ls dist/luci-app-ddns-go_*.ipk)" \
-            "./etc/uci-defaults/99-luci-ddns-go" \
-            "./usr/lib/lua/luci/controller/ddns_go.lua" \
-            "./usr/lib/lua/luci/model/cbi/ddns_go/config.lua" \
-            "./usr/lib/lua/luci/view/ddns_go/panel.htm" \
-            "./usr/lib/lua/luci/view/ddns_go/log.htm"
-
-          echo "== 依赖检查"
           for ipk in dist/*.ipk; do
-            echo -n "$(basename "$ipk"): "
-            tar xzOf "$ipk" ./control.tar.gz | tar xzO ./control | grep '^Depends:'
+            case "$(basename "$ipk")" in
+              ssserver-luci_*)
+                check "$ipk" \
+                  "./etc/init.d/ssserver" \
+                  "./etc/config/ssserver" \
+                  "./etc/uci-defaults/90-ssserver-luci" \
+                  "./usr/lib/lua/luci/controller/ssserver.lua" \
+                  "./usr/lib/lua/luci/model/cbi/ssserver/settings.lua" \
+                  "./usr/lib/lua/luci/model/cbi/ssserver/advanced.lua" \
+                  "./usr/lib/lua/luci/view/ssserver/overview.htm"
+                ;;
+              luci-app-ddns-go_*)
+                check "$ipk" \
+                  "./etc/uci-defaults/99-luci-ddns-go" \
+                  "./usr/lib/lua/luci/controller/ddns_go.lua" \
+                  "./usr/lib/lua/luci/model/cbi/ddns_go/config.lua" \
+                  "./usr/lib/lua/luci/view/ddns_go/panel.htm" \
+                  "./usr/lib/lua/luci/view/ddns_go/log.htm"
+                ;;
+            esac
           done
 
       - name: Upload ipk
@@ -124,9 +184,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # 只有 tag 匹配 <PKG_NAME>-v<PKG_VERSION> 时才发布，Release 名称用插件自己的版本
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ ipk ]
+    if: needs.meta.outputs.release_pkg != ''
+    needs: [ meta, ipk ]
     runs-on: ubuntu-24.04
 
     steps:
@@ -136,11 +197,13 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: List
+      - name: Show
         run: ls -l dist
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          name: ${{ needs.meta.outputs.release_title }}
+          tag_name: ${{ needs.meta.outputs.release_tag }}
+          files: dist/${{ needs.meta.outputs.release_pkg }}_*.ipk
           generate_release_notes: true
