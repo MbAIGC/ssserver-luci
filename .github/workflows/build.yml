@@ -62,7 +62,7 @@ jobs:
 
           rm -rf "$DEST"
           mkdir -p "$DEST"
-          tar -cf - --exclude=.git --exclude=.github --exclude=dist --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' . \
+          tar -cf - --exclude=.git --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' -C "$PKG_DIR" . \
             | tar -xf - -C "$DEST"
 
           cd "$SDK"
@@ -136,9 +136,8 @@ jobs:
 
           rm -rf "$DEST"
           mkdir -p "$DEST"
-          tar -cf - --exclude=.git --exclude=.github --exclude=dist --exclude=dist-apk \
-            --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' . \
-            | tar -xf - -C "$DEST"
+          tar -cf - --exclude=.git --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' \
+            -C "$PKG_DIR" . | tar -xf - -C "$DEST"
 
           cd "$SDK"
           make defconfig

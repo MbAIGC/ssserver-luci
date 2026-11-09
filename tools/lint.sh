@@ -7,8 +7,10 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+PKG="ssserver-luci"
+
 echo "== shell 语法 =="
-for f in root/etc/init.d/ssserver root/etc/uci-defaults/90-ssserver-luci; do
+for f in "$PKG"/root/etc/init.d/ssserver "$PKG"/root/etc/uci-defaults/90-ssserver-luci; do
 	sh -n "$f"
 	echo "ok  $f"
 done
@@ -22,7 +24,7 @@ elif command -v luac >/dev/null 2>&1; then
 fi
 
 if [ -n "$LUA_CHECK" ]; then
-	for f in $(find luasrc -name '*.lua' | sort); do
+	for f in $(find "$PKG"/luasrc -name '*.lua' | sort); do
 		$LUA_CHECK "$f"
 		echo "ok  $f"
 	done
@@ -31,7 +33,7 @@ else
 fi
 
 echo "== 模板语法 =="
-for f in $(find luasrc -name '*.htm' | sort); do
+for f in $(find "$PKG"/luasrc -name '*.htm' | sort); do
 	# 至少保证 <% 与 %> 成对
 	o=$(grep -o '<%' "$f" | wc -l)
 	c=$(grep -o '%>' "$f" | wc -l)
@@ -40,14 +42,14 @@ for f in $(find luasrc -name '*.htm' | sort); do
 done
 
 echo "== JSON 语法 =="
-if ls root/usr/share/**/*.json >/dev/null 2>&1; then
+if ls "$PKG"/root/usr/share/**/*.json >/dev/null 2>&1; then
 	python3 - <<'PY'
 import glob
 import json
 import sys
 
 bad = 0
-for f in sorted(glob.glob('root/usr/share/**/*.json', recursive=True)):
+for f in sorted(glob.glob('ssserver-luci/root/usr/share/**/*.json', recursive=True)):
     try:
         with open(f, encoding='utf-8') as fh:
             json.load(fh)
@@ -62,7 +64,7 @@ else
 fi
 
 echo "== 防火墙关键词检查（应无输出） =="
-if grep -rnE '\b(iptables|ip6tables|nft|nftables|fw3|fw4|tproxy)\b' root/ luasrc/ 2>/dev/null; then
+if grep -rnE '\b(iptables|ip6tables|nft|nftables|fw3|fw4|tproxy)\b' "$PKG"/root "$PKG"/luasrc 2>/dev/null; then
 	echo "错误：检测到防火墙相关代码" >&2
 	exit 1
 fi

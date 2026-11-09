@@ -35,18 +35,21 @@ LuCI 界面，用来管理**系统里已经装好**的 [shadowsocks-rust](https:
 
 ## 目录结构
 
+一个插件一个文件夹，后续要加别的插件直接并列即可：
+
 ```
-ssserver-luci/
-├── Makefile                                  # OpenWrt 包定义（PKGARCH:=all）
-├── root/
-│   ├── etc/config/ssserver                   # UCI 默认配置（权限 600）
-│   ├── etc/init.d/ssserver                   # procd 服务：生成 JSON、校验、回滚
-│   └── etc/uci-defaults/90-ssserver-luci     # 首次安装生成随机密码
-├── luasrc/
-│   ├── controller/ssserver.lua               # 菜单注册（Lua 派发器）
-│   ├── model/cbi/ssserver/settings.lua       # 服务器配置
-│   ├── model/cbi/ssserver/advanced.lua       # 高级设置
-│   └── view/ssserver/overview.htm            # 运行概览（含状态与按钮）
+.
+├── ssserver-luci/                            # ← 插件本体（包名 ssserver-luci）
+│   ├── Makefile                              # 纯文件包，PKGARCH:=all
+│   ├── root/
+│   │   ├── etc/config/ssserver               # UCI 默认配置（权限 600）
+│   │   ├── etc/init.d/ssserver               # procd：生成 JSON、校验、回滚
+│   │   └── etc/uci-defaults/90-ssserver-luci # 首装生成随机密码
+│   └── luasrc/
+│       ├── controller/ssserver.lua           # 菜单注册（Lua 派发器）
+│       ├── model/cbi/ssserver/settings.lua   # 服务器配置
+│       ├── model/cbi/ssserver/advanced.lua   # 高级设置
+│       └── view/ssserver/overview.htm        # 运行概览（状态与按钮）
 ├── tools/
 │   ├── lint.sh                               # 语法检查 + 防火墙关键词检查
 │   └── test-initd.sh                         # init.d 校验/JSON 生成自测
@@ -80,8 +83,8 @@ ssserver --version
 
 | 固件 | 产物 | 安装 |
 |---|---|---|
-| 24.10.x（opkg） | `ssserver-luci_1.0.2-r1_all.ipk` | `opkg install /tmp/*.ipk` |
-| snapshot（apk） | `ssserver-luci-1.0.2-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
+| 24.10.x（opkg） | `ssserver-luci_1.0.3-r1_all.ipk` | `opkg install /tmp/*.ipk` |
+| snapshot（apk） | `ssserver-luci-1.0.3-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
 
 判断方法：设备上 `command -v apk` 有输出就是 snapshot，`command -v opkg` 有输出就是 24.10。
 
@@ -101,8 +104,8 @@ APK 是自己打的、没有 OpenWrt 官方签名，所以必须带 `--allow-unt
 包是纯脚本，直接覆盖文件即可：
 
 ```sh
-scp -r root/*    root@192.168.1.1:/
-scp -r luasrc/*  root@192.168.1.1:/usr/lib/lua/luci/
+scp -r ssserver-luci/root/*   root@192.168.1.1:/
+scp -r ssserver-luci/luasrc/* root@192.168.1.1:/usr/lib/lua/luci/
 ssh root@192.168.1.1 '
     /etc/uci-defaults/90-ssserver-luci
     chmod 600 /etc/config/ssserver
@@ -230,8 +233,8 @@ sh tools/test-initd.sh  # 配置校验与 JSON 生成自测（无需 OpenWrt）
 
 CI 有两条流水线：
 
-- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.2-r1_all.ipk`
-- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.2-r1.apk`
+- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.3-r1_all.ipk`
+- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.3-r1.apk`
 
 包都是 `all` 架构，与 SDK 的 target 无关，x86_64/arm 设备都能装。如需换 SDK 版本，改 `.github/workflows/build.yml` 里的
 `SDK_VERSION` / `SDK_URL` 两处；换了 SDK 记得同步改缓存 key，否则会命中旧 tarball。

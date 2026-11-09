@@ -5,3 +5,7 @@ files.txt
 *.ipk
 *.tar.zst
 .f.js
+.ddns/
+.work/
+.lua/
+dist-apk/

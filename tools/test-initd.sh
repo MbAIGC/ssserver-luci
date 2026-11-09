@@ -12,7 +12,7 @@ logger() { :; }
 extra_command() { :; }
 
 # shellcheck disable=SC1091
-. ./root/etc/init.d/ssserver
+. ./ssserver-luci/root/etc/init.d/ssserver
 
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
