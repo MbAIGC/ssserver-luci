@@ -72,15 +72,25 @@ ssserver --version
 
 ### 方式一：GitHub Actions 产物（推荐）
 
-推送到 `main` 或手动触发 workflow 后，在 Actions 页面的 Artifacts 里下载
-`ssserver-luci-ipk`，然后：
+每次 push 会并行跑两个 job，因为不同固件的包管理器不一样：
+
+| 固件 | 产物 | 安装 |
+|---|---|---|
+| 24.10.x（opkg） | `ssserver-luci_1.0.0-r1_all.ipk` | `opkg install /tmp/*.ipk` |
+| snapshot（apk） | `ssserver-luci-1.0.0-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
+
+判断方法：设备上 `command -v apk` 有输出就是 snapshot，`command -v opkg` 有输出就是 24.10。
 
 ```sh
-scp ssserver-luci_*_all.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg install /tmp/ssserver-luci_*_all.ipk'
+scp ssserver-luci_* root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'opkg install /tmp/ssserver-luci_*.ipk'       # 或
+ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/ssserver-luci-*.apk'
 ```
 
-给 tag 打 `v*`（如 `git tag v1.0.0 && git push --tags`）会自动创建 Release 并附带 IPK。
+APK 是自己打的、没有 OpenWrt 官方签名，所以必须带 `--allow-untrusted`
+（或先把本机公钥加进 `/etc/apk/keys`）。
+
+给 tag 打 `v*`（如 `git tag v1.0.0 && git push --tags`）会自动创建 Release 并同时附带两种包。
 
 ### 方式二：手动拷贝（不用编译）
 
@@ -214,8 +224,12 @@ sh tools/lint.sh        # shell/JSON/JS 语法 + 防火墙关键词检查
 sh tools/test-initd.sh  # 配置校验与 JSON 生成自测（无需 OpenWrt）
 ```
 
-CI 用 24.10.5 的 x86-64 SDK 构建，产出 `ssserver-luci_1.0.0-r1_all.ipk`（`all` 架构，
-任意 24.10.x 设备都能装）。如需换 SDK 版本，改 `.github/workflows/build.yml` 里的
+CI 有两条流水线：
+
+- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.0-r1_all.ipk`
+- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.0-r1.apk`
+
+包都是 `all` 架构，与 SDK 的 target 无关，x86_64/arm 设备都能装。如需换 SDK 版本，改 `.github/workflows/build.yml` 里的
 `SDK_VERSION` / `SDK_URL` 两处；换了 SDK 记得同步改缓存 key，否则会命中旧 tarball。
 
 workflow 里已内置两道保险：
