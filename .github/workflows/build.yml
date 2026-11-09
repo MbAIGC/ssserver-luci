@@ -1,4 +1,4 @@
-name: build-ipk
+name: build
 
 on:
   push:
@@ -20,7 +20,8 @@ env:
   PKG_DIR: "ssserver-luci"
 
 jobs:
-  build:
+  # 24.10.x（opkg）→ .ipk
+  ipk:
     runs-on: ubuntu-24.04
 
     steps:
@@ -40,28 +41,28 @@ jobs:
       - name: Cache SDK tarball
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/sdk.tar.zst
+          path: ${{ runner.temp }}/sdk-ipk.tar.zst
           key: openwrt-sdk-${{ env.SDK_VERSION }}-x86-64-v1
 
       - name: Fetch SDK
         run: |
           set -euo pipefail
-          if [ ! -s "$RUNNER_TEMP/sdk.tar.zst" ]; then
-            curl -fL --retry 3 -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
+          if [ ! -s "$RUNNER_TEMP/sdk-ipk.tar.zst" ]; then
+            curl -fL --retry 3 -o "$RUNNER_TEMP/sdk-ipk.tar.zst" "$SDK_URL"
           fi
-          mkdir -p "$RUNNER_TEMP/sdk"
-          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk"
-          ls -d "$RUNNER_TEMP"/sdk/openwrt-sdk-*
+          mkdir -p "$RUNNER_TEMP/sdk-ipk"
+          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk-ipk.tar.zst" -C "$RUNNER_TEMP/sdk-ipk"
+          ls -d "$RUNNER_TEMP"/sdk-ipk/openwrt-sdk-*
 
-      - name: Build package
+      - name: Build ipk
         run: |
           set -euo pipefail
-          SDK="$(echo "$RUNNER_TEMP"/sdk/openwrt-sdk-*)"
+          SDK="$(echo "$RUNNER_TEMP"/sdk-ipk/openwrt-sdk-*)"
           DEST="$SDK/package/$PKG_DIR"
 
           rm -rf "$DEST"
           mkdir -p "$DEST"
-          tar -cf - --exclude=.git --exclude=.github --exclude=dist --exclude='.tmp-*' --exclude='*.ipk' . \
+          tar -cf - --exclude=.git --exclude=.github --exclude=dist --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' . \
             | tar -xf - -C "$DEST"
 
           cd "$SDK"
@@ -93,17 +94,87 @@ jobs:
             grep -qxF "$need" files.txt || { echo "缺少文件: $need"; exit 1; }
           done
 
-      - name: Upload artifact
+      - name: Upload ipk
         uses: actions/upload-artifact@v4
         with:
-          name: ssserver-luci-ipk
+          name: ipk
           path: dist/*.ipk
           if-no-files-found: error
           retention-days: 30
 
+  # snapshot（apk）→ .apk
+  apk:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libncurses-dev zlib1g-dev gawk git gettext \
+            libssl-dev xsltproc rsync wget unzip zstd python3
+
+      - name: Fetch snapshot SDK
+        run: |
+          set -euo pipefail
+          base="https://downloads.openwrt.org/snapshots/targets/x86/64/"
+          name="$(curl -fsSL "$base" | grep -o 'openwrt-sdk-x86-64[^"<]*\.tar\.zst' | head -n1)"
+          [ -n "$name" ] || { echo "未找到 snapshot SDK"; exit 1; }
+          echo "SDK: $name"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/sdk-apk.tar.zst" "$base$name"
+          mkdir -p "$RUNNER_TEMP/sdk-apk"
+          tar --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk-apk.tar.zst" -C "$RUNNER_TEMP/sdk-apk"
+          ls -d "$RUNNER_TEMP"/sdk-apk/openwrt-sdk-*
+
+      - name: Build apk
+        run: |
+          set -euo pipefail
+          SDK="$(echo "$RUNNER_TEMP"/sdk-apk/openwrt-sdk-*)"
+          DEST="$SDK/package/$PKG_DIR"
+
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          tar -cf - --exclude=.git --exclude=.github --exclude=dist --exclude=dist-apk \
+            --exclude='.tmp-*' --exclude='*.ipk' --exclude='*.apk' . \
+            | tar -xf - -C "$DEST"
+
+          cd "$SDK"
+          make defconfig
+          make "package/$PKG_DIR/compile" V=s -j"$(nproc)"
+
+          mkdir -p "$GITHUB_WORKSPACE/dist-apk"
+          find bin -name 'ssserver-luci*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/dist-apk/" \;
+          ls -l "$GITHUB_WORKSPACE/dist-apk"
+          test -n "$(ls -A "$GITHUB_WORKSPACE/dist-apk")"
+
+      - name: Upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: dist-apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ ipk, apk ]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List
+        run: ls -l dist
+
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.ipk
+          files: dist/*
           generate_release_notes: true
