@@ -11,7 +11,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ssserver-luci
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 
 PKG_LICENSE:=GPL-3.0
@@ -36,7 +36,7 @@ define Package/$(PKG_NAME)
 	CATEGORY:=LuCI
 	SUBMENU:=3. Applications
 	TITLE:=LuCI for Shadowsocks Rust server (ssserver)
-	DEPENDS:=+luci-base
+	DEPENDS:=+luci-base +luci-compat
 	PKGARCH:=all
 	URL:=https://github.com/9566618/shadowproxy
 endef
@@ -62,16 +62,15 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./root/etc/uci-defaults/90-ssserver-luci $(1)/etc/uci-defaults/90-ssserver-luci
 
-	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
-	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/ssserver-luci.json $(1)/usr/share/luci/menu.d/ssserver-luci.json
+	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
+	$(INSTALL_DATA) ./luasrc/controller/ssserver.lua $(1)/usr/lib/lua/luci/controller/ssserver.lua
 
-	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
-	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/ssserver-luci.json $(1)/usr/share/rpcd/acl.d/ssserver-luci.json
+	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/ssserver
+	$(INSTALL_DATA) ./luasrc/model/cbi/ssserver/settings.lua $(1)/usr/lib/lua/luci/model/cbi/ssserver/settings.lua
+	$(INSTALL_DATA) ./luasrc/model/cbi/ssserver/advanced.lua $(1)/usr/lib/lua/luci/model/cbi/ssserver/advanced.lua
 
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/ssserver
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/ssserver/overview.js $(1)/www/luci-static/resources/view/ssserver/overview.js
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/ssserver/settings.js $(1)/www/luci-static/resources/view/ssserver/settings.js
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/ssserver/advanced.js $(1)/www/luci-static/resources/view/ssserver/advanced.js
+	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/ssserver
+	$(INSTALL_DATA) ./luasrc/view/ssserver/overview.htm $(1)/usr/lib/lua/luci/view/ssserver/overview.htm
 endef
 
 define Package/$(PKG_NAME)/postinst
@@ -80,6 +79,7 @@ define Package/$(PKG_NAME)/postinst
 	[ -x /etc/uci-defaults/90-ssserver-luci ] && /etc/uci-defaults/90-ssserver-luci >/dev/null 2>&1
 	rm -f /tmp/luci-indexcache.*
 	rm -rf /tmp/luci-modulecache/
+	rm -f /tmp/luci-indexcache
 	/etc/init.d/rpcd restart >/dev/null 2>&1
 	[ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
 	if [ -x /etc/rc.d/S95ssserver ]; then

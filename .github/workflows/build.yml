@@ -33,7 +33,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential libncurses-dev zlib1g-dev gawk git gettext \
-            libssl-dev xsltproc rsync wget unzip zstd python3
+            libssl-dev xsltproc rsync wget unzip zstd python3 lua5.1
 
       - name: Lint sources
         run: sh tools/lint.sh
@@ -85,11 +85,10 @@ jobs:
             "./etc/init.d/ssserver" \
             "./etc/config/ssserver" \
             "./etc/uci-defaults/90-ssserver-luci" \
-            "./usr/share/luci/menu.d/ssserver-luci.json" \
-            "./usr/share/rpcd/acl.d/ssserver-luci.json" \
-            "./www/luci-static/resources/view/ssserver/overview.js" \
-            "./www/luci-static/resources/view/ssserver/settings.js" \
-            "./www/luci-static/resources/view/ssserver/advanced.js"
+            "./usr/lib/lua/luci/controller/ssserver.lua" \
+            "./usr/lib/lua/luci/model/cbi/ssserver/settings.lua" \
+            "./usr/lib/lua/luci/model/cbi/ssserver/advanced.lua" \
+            "./usr/lib/lua/luci/view/ssserver/overview.htm"
           do
             grep -qxF "$need" files.txt || { echo "缺少文件: $need"; exit 1; }
           done
@@ -115,7 +114,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential libncurses-dev zlib1g-dev gawk git gettext \
-            libssl-dev xsltproc rsync wget unzip zstd python3
+            libssl-dev xsltproc rsync wget unzip zstd python3 lua5.1
 
       - name: Fetch snapshot SDK
         run: |

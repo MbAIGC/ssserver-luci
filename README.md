@@ -21,7 +21,7 @@ LuCI 界面，用来管理**系统里已经装好**的 [shadowsocks-rust](https:
 - 启动、停止、重启
 - 开机自启开关
 - 查看日志（syslog，密码自动脱敏）
-- 保存与"保存并应用"分离；应用失败自动回滚到上一份可用配置
+- 保存即应用：先校验再重启，新配置起不来自动回滚到上一份可用配置
 
 ## 它不做什么
 
@@ -41,19 +41,23 @@ ssserver-luci/
 ├── root/
 │   ├── etc/config/ssserver                   # UCI 默认配置（权限 600）
 │   ├── etc/init.d/ssserver                   # procd 服务：生成 JSON、校验、回滚
-│   ├── etc/uci-defaults/90-ssserver-luci     # 首次安装生成随机密码
-│   └── usr/share/
-│       ├── luci/menu.d/ssserver-luci.json    # 菜单
-│       └── rpcd/acl.d/ssserver-luci.json     # 浏览器侧权限
-├── htdocs/luci-static/resources/view/ssserver/
-│   ├── overview.js                           # 运行概览
-│   ├── settings.js                           # 服务器配置
-│   └── advanced.js                           # 高级设置
+│   └── etc/uci-defaults/90-ssserver-luci     # 首次安装生成随机密码
+├── luasrc/
+│   ├── controller/ssserver.lua               # 菜单注册（Lua 派发器）
+│   ├── model/cbi/ssserver/settings.lua       # 服务器配置
+│   ├── model/cbi/ssserver/advanced.lua       # 高级设置
+│   └── view/ssserver/overview.htm            # 运行概览（含状态与按钮）
 ├── tools/
 │   ├── lint.sh                               # 语法检查 + 防火墙关键词检查
 │   └── test-initd.sh                         # init.d 校验/JSON 生成自测
-└── .github/workflows/build.yml               # 用 OpenWrt 24.10.5 SDK 出 IPK
+└── .github/workflows/build.yml               # 出 IPK / APK
 ```
+
+> **UI 用的是 Lua CBI，不是 JS 视图。** 因为目标固件（LEDE / Lean 系）的
+> `/cgi-bin/luci` 由 Lua 派发器处理（`uhttpd.main.ucode_prefix` 为空），
+> 它只认 `template` / `cbi` / `call` 目标，不读 `menu.d/*.json`，也没有
+> `/luci-static/resources/luci.js`。Lua CBI 在这类固件和原版 OpenWrt
+> （需 `luci-compat`）上都能跑。
 
 ## 前置条件
 
@@ -76,8 +80,8 @@ ssserver --version
 
 | 固件 | 产物 | 安装 |
 |---|---|---|
-| 24.10.x（opkg） | `ssserver-luci_1.0.1-r1_all.ipk` | `opkg install /tmp/*.ipk` |
-| snapshot（apk） | `ssserver-luci-1.0.1-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
+| 24.10.x（opkg） | `ssserver-luci_1.0.2-r1_all.ipk` | `opkg install /tmp/*.ipk` |
+| snapshot（apk） | `ssserver-luci-1.0.2-r1.apk` | `apk add --allow-untrusted /tmp/*.apk` |
 
 判断方法：设备上 `command -v apk` 有输出就是 snapshot，`command -v opkg` 有输出就是 24.10。
 
@@ -97,13 +101,13 @@ APK 是自己打的、没有 OpenWrt 官方签名，所以必须带 `--allow-unt
 包是纯脚本，直接覆盖文件即可：
 
 ```sh
-scp -r root/*   root@192.168.1.1:/
-scp -r htdocs/* root@192.168.1.1:/www/
+scp -r root/*    root@192.168.1.1:/
+scp -r luasrc/*  root@192.168.1.1:/usr/lib/lua/luci/
 ssh root@192.168.1.1 '
     /etc/uci-defaults/90-ssserver-luci
     chmod 600 /etc/config/ssserver
-    rm -rf /tmp/luci-indexcache.* /tmp/luci-modulecache
-    /etc/init.d/rpcd reload
+    rm -f /tmp/luci-indexcache
+    /etc/init.d/uhttpd reload
 '
 ```
 
@@ -211,8 +215,8 @@ opkg install /tmp/ssserver-luci_*_all.ipk
 
 | 现象 | 处理 |
 |---|---|
-| 菜单里看不到 | `ls /usr/share/luci/menu.d/ssserver-luci.json`；`rm -rf /tmp/luci-*; /etc/init.d/rpcd reload` |
-| 按钮报 501 / 权限错误 | ACL 没生效：`/etc/init.d/rpcd reload`，必要时重启 uhttpd |
+| 菜单里看不到 | `ls /usr/lib/lua/luci/controller/ssserver.lua`；然后 `rm -f /tmp/luci-indexcache; /etc/init.d/uhttpd reload` |
+| 页面报 500 / 空白 | `logread | tail -30`，多半是 Lua 语法或模板渲染错误 |
 | 点应用后服务没起来 | `logread -e ssserver` 看 `应用失败` / `回滚` 记录；常见原因是端口被占或算法不被支持 |
 | 客户端连不上但服务是"运行中" | 防火墙/端口映射没放行，或 `server` 监听在回环地址 |
 | 日志空白 | 系统没启用 syslog，或 `logread` 权限不足 |
@@ -226,8 +230,8 @@ sh tools/test-initd.sh  # 配置校验与 JSON 生成自测（无需 OpenWrt）
 
 CI 有两条流水线：
 
-- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.1-r1_all.ipk`
-- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.1-r1.apk`
+- `ipk`：24.10.5 的 x86-64 SDK → `ssserver-luci_1.0.2-r1_all.ipk`
+- `apk`：snapshot 的 x86-64 SDK（URL 每次从下载站目录里解析）→ `ssserver-luci-1.0.2-r1.apk`
 
 包都是 `all` 架构，与 SDK 的 target 无关，x86_64/arm 设备都能装。如需换 SDK 版本，改 `.github/workflows/build.yml` 里的
 `SDK_VERSION` / `SDK_URL` 两处；换了 SDK 记得同步改缓存 key，否则会命中旧 tarball。

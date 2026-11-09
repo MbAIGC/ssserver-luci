@@ -1,0 +1,135 @@
+<%
+-- 动作处理必须放在 header 之前：redirect 要在任何输出之前发生
+local http = require "luci.http"
+local sys  = require "luci.sys"
+local dispatcher = require "luci.dispatcher"
+
+local action = http.formvalue("action")
+if action then
+	local allowed = { start = true, stop = true, restart = true, enable = true, disable = true }
+	if allowed[action] then
+		if action == "restart" then
+			sys.call("/etc/init.d/ssserver apply >/dev/null 2>&1")
+		else
+			sys.call("/etc/init.d/ssserver " .. action .. " >/dev/null 2>&1")
+		end
+	end
+	http.redirect(dispatcher.build_url("admin/services/ssserver/overview"))
+	return
+end
+%>
+<%+header%>
+
+<%
+local fs = require "nixio.fs"
+local uci = require "luci.model.uci".cursor()
+
+local pid = fs.readfile("/var/run/ssserver.pid")
+pid = pid and pid:gsub("%s+", "") or ""
+local running = (pid ~= "" and fs.access("/proc/" .. pid))
+
+local server    = uci:get("ssserver", "main", "server") or "0.0.0.0"
+local port      = uci:get("ssserver", "main", "server_port") or "8388"
+local method    = uci:get("ssserver", "main", "method") or "aes-256-gcm"
+local mode      = uci:get("ssserver", "main", "mode") or "tcp_and_udp"
+local password  = uci:get("ssserver", "main", "password") or ""
+local autostart = fs.access("/etc/rc.d/S95ssserver")
+
+local mode_text = ({
+	tcp_only     = translate("仅 TCP"),
+	tcp_and_udp  = translate("TCP + UDP"),
+	udp_only     = translate("仅 UDP")
+})[mode] or mode
+
+local version = (sys.exec("/usr/bin/ssserver --version 2>/dev/null") or ""):match("^[^\n]*") or ""
+version = version:gsub("%s+$", "")
+
+local log = sys.exec("logread -e ssserver 2>/dev/null | tail -n 60") or ""
+if #password >= 6 then
+	local pat = password:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+	log = log:gsub(pat, "********")
+end
+%>
+
+<h2 name="content"><%:Shadowsocks 服务端%></h2>
+
+<div class="cbi-section">
+	<h3><%:服务状态%></h3>
+
+	<table class="cbi-section-table">
+		<tr class="cbi-section-table-row">
+			<td class="cbi-value-title" style="width:26%"><%:运行状态%></td>
+			<td class="cbi-value-field">
+				<% if running then %>
+					<span style="color:#2e7d32;font-weight:bold"><%:运行中%></span>
+					&nbsp;PID <%=pcdata(pid)%>
+				<% else %>
+					<span style="color:#c62828;font-weight:bold"><%:已停止%></span>
+				<% end %>
+			</td>
+		</tr>
+		<tr class="cbi-section-table-row">
+			<td class="cbi-value-title"><%:监听地址%></td>
+			<td class="cbi-value-field"><%=pcdata(server)%>:<%=pcdata(port)%></td>
+		</tr>
+		<tr class="cbi-section-table-row">
+			<td class="cbi-value-title"><%:协议模式%></td>
+			<td class="cbi-value-field"><%=pcdata(mode_text)%></td>
+		</tr>
+		<tr class="cbi-section-table-row">
+			<td class="cbi-value-title"><%:加密方式%></td>
+			<td class="cbi-value-field"><%=pcdata(method)%></td>
+		</tr>
+		<tr class="cbi-section-table-row">
+			<td class="cbi-value-title"><%:服务端版本%></td>
+			<td class="cbi-value-field">
+				<% if version ~= "" then %>
+					<%=pcdata(version)%>
+				<% else %>
+					<span style="color:#c62828"><%:未检测到 /usr/bin/ssserver%></span>
+				<% end %>
+			</td>
+		</tr>
+		<tr class="cbi-section-table-row">
+			<td class="cbi-value-title"><%:开机自启%></td>
+			<td class="cbi-value-field"><% if autostart then %><%:已启用%><% else %><%:未启用%><% end %></td>
+		</tr>
+	</table>
+
+	<form method="post" action="<%=dispatcher.build_url("admin/services/ssserver/overview")%>">
+		<input type="hidden" name="token" value="<%=token%>" />
+		<div class="cbi-page-actions">
+			<button type="submit" name="action" value="start" class="cbi-button cbi-button-apply"><%:启动%></button>
+			<button type="submit" name="action" value="stop" class="cbi-button cbi-button-reset"><%:停止%></button>
+			<button type="submit" name="action" value="restart" class="cbi-button cbi-button-action"><%:重启%></button>
+			<% if autostart then %>
+			<button type="submit" name="action" value="disable" class="cbi-button"><%:关闭开机自启%></button>
+			<% else %>
+			<button type="submit" name="action" value="enable" class="cbi-button"><%:开启开机自启%></button>
+			<% end %>
+		</div>
+	</form>
+
+	<p class="cbi-section-descr">
+		<%:状态取自实际进程（/var/run/ssserver.pid + /proc），不是配置里的开关值。%><br />
+		<%:「重启」会先校验配置再重启，新配置起不来会自动回滚到上一份可用配置。%>
+	</p>
+</div>
+
+<div class="cbi-section">
+	<h3><%:最近日志%></h3>
+	<p class="cbi-section-descr">
+		<%:来源：系统 syslog（logger -t ssserver 以及 procd 捕获的 ssserver stderr）。密码已脱敏。%>
+	</p>
+	<pre style="max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;padding:8px;border-radius:4px;background:rgba(127,127,127,0.08)"><%=pcdata(log ~= "" and log or translate("（暂无日志）"))%></pre>
+	<form method="get" action="<%=dispatcher.build_url("admin/services/ssserver/overview")%>">
+		<div class="cbi-page-actions">
+			<input type="submit" class="cbi-button cbi-button-action" value="<%:刷新日志%>" />
+		</div>
+	</form>
+	<p class="cbi-section-descr">
+		<%:提示：本插件不修改防火墙。若外部无法连接，请自行放行上表显示的地址与端口（TCP 和 UDP 都要）。%>
+	</p>
+</div>
+
+<%+footer%>
