@@ -53,6 +53,7 @@ Lua 派发器不读 `menu.d`，也没有 JS 加载器，装了只会「菜单里
 ## 插件一：ssserver-luci
 
 管理系统中**已安装**的 `ssserver`（不打包二进制，不碰防火墙）。
+适配版本：https://sourceforge.net/projects/openwrt-passwall-build/files/releases/packages-24.10/x86_64/passwall_packages/
 
 - 运行概览：状态 / PID / 监听 / 协议 / 算法 / 版本 / 开机自启 + 启停重启 + 日志
 - 服务器配置：地址、端口、密码、算法、`mode`
@@ -66,6 +67,7 @@ Lua 派发器不读 `menu.d`，也没有 JS 加载器，装了只会「菜单里
 
 DDNS-GO 的界面，改造自 [sirpdboy/luci-app-ddns-go](https://github.com/sirpdboy/luci-app-ddns-go)。
 上游是 ucode + JS 形态，本仓库把它整体换成 Lua。
+适配版本：https://github.com/sirpdboy/luci-app-ddns-go/releases
 
 - 控制面板：内嵌 ddns-go 自带 Web UI（未运行 / 禁用 Web / HTTPS 混合内容都有提示）
 - 基础设置：启用、端口、更新间隔、比对间隔、DNS、跳过证书校验、禁用 Web、延迟启动；
