@@ -33,4 +33,21 @@ else
 	echo "  未找到 $SYS_MOD，跳过 LED 清理" >&2
 fi
 
+# ---- 从 DEFAULT_PACKAGES.router 移除 Lean 强加的包
+# 这些包写死在 include/target.mk 里，仅靠 .config 的 "is not set" 会被 make defconfig 覆盖回来
+TARGET_MK="include/target.mk"
+if [ -f "$TARGET_MK" ]; then
+	cp -f "$TARGET_MK" "$TARGET_MK.trim-orig"
+	for pkg in luci-theme-design luci-app-ssr-plus; do
+		if grep -q "$pkg" "$TARGET_MK"; then
+			sed -i "s/${pkg} //g" "$TARGET_MK"
+			echo "  target.mk: 移除 $pkg"
+		fi
+	done
+	echo "  DEFAULT_PACKAGES.router 现在是："
+	sed -n '/^DEFAULT_PACKAGES.router:=/,/^[^\t]/p' "$TARGET_MK" | head -20
+else
+	echo "  未找到 $TARGET_MK，跳过默认包裁剪" >&2
+fi
+
 echo "trim 完成"

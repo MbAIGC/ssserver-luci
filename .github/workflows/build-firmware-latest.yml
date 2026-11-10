@@ -135,6 +135,18 @@ jobs:
             grep -qxF "$opt" .config || echo "$opt" >> .config
           done
           make defconfig
+          echo '== 精简校验（失败即中止）=='
+          for bad in luci-theme-design luci-theme-material luci-theme-openwrt luci-theme-openwrt-2020 luci-app-ssr-plus; do
+            if grep -qxF "CONFIG_PACKAGE_${bad}=y" .config; then
+              echo "ERROR: ${bad} 仍被选中（target.mk 裁剪未生效）" >&2
+              exit 1
+            fi
+            echo "  OK: ${bad} 未选中"
+          done
+          for good in luci-theme-bootstrap luci-theme-argon luci-app-ddns-go ddns-go ssserver-luci; do
+            grep -qxF "CONFIG_PACKAGE_${good}=y" .config || { echo "ERROR: ${good} 缺失" >&2; exit 1; }
+            echo "  OK: ${good} 已选中"
+          done
           echo '== flags =='
           grep -E 'CONFIG_PACKAGE_(luci-app-turboacc|kmod-nft-offload|kmod-wireguard|wireguard-tools|luci-proto-wireguard|ssserver-luci|luci-app-ddns-go|luci-app-passwall|luci-app-openclash)=' .config || true
 
