@@ -92,13 +92,20 @@ jobs:
         run: |
           set -eux
           cd openwrt
-          mkdir -p package/ssserver-luci package/luci-app-ddns-go package/luci-app-turboacc
+          mkdir -p package/ssserver-luci package/luci-app-turboacc
           cp -a "$GITHUB_WORKSPACE/ssserver-luci/." package/ssserver-luci/
-          cp -a "$GITHUB_WORKSPACE/luci-app-ddns-go/." package/luci-app-ddns-go/
           cp -a "$GITHUB_WORKSPACE/firmware-build/local-packages/luci-app-turboacc/." package/luci-app-turboacc/
           sed -i 's#^include ../../luci.mk#include $(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-turboacc/Makefile
           sed -i 's#^PKG_RELEASE:=.*#PKG_RELEASE:=1#' package/luci-app-turboacc/Makefile
           find package/luci-app-turboacc -type f | sort
+
+      - name: Apply ddns-go mix (Lean backend + sirpdboy LuCI)
+        run: |
+          set -eux
+          cd openwrt
+          "$GITHUB_WORKSPACE/ddns-go-lean-sirpdboy-mix/apply.sh" --upstream "$PWD"
+          echo '== .mix-info =='
+          cat .mix-info
 
       - name: Configure
         run: |
@@ -110,6 +117,7 @@ jobs:
             CONFIG_PACKAGE_ddns-go=y \
             CONFIG_PACKAGE_ssserver-luci=y \
             CONFIG_PACKAGE_luci-app-ddns-go=y \
+            CONFIG_PACKAGE_luci-i18n-ddns-go-zh-cn=y \
             CONFIG_PACKAGE_kmod-wireguard=y \
             CONFIG_PACKAGE_kmod-udptunnel4=y \
             CONFIG_PACKAGE_kmod-udptunnel6=y \
@@ -141,9 +149,17 @@ jobs:
         if: always()
         run: |
           set -eux
-          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/ipk"
           cp -v openwrt/bin/targets/x86/64/*combined-efi.img.gz \
             "$GITHUB_WORKSPACE/artifacts/lede-x86-64-generic-squashfs-combined-efi.img.gz"
+          # 顺带提取插件 ipk（找不到的自动跳过）
+          set +e
+          find openwrt/bin/packages -name '*.ipk' \
+            | grep -iE '/(luci-app-(openclash|passwall|ddns-go)|luci-i18n-|ssserver-luci|shadowsocks-rust-|ddns-go_|sing-box|chinadns-ng|dns2socks|microsocks|ipt2socks|simple-obfs-client|geoview|tcping)' \
+            | while read -r f; do cp -f "$f" "$GITHUB_WORKSPACE/artifacts/ipk/"; done
+          set -e
+          echo '== ipk =='
+          ls -lh "$GITHUB_WORKSPACE/artifacts/ipk" || true
           ls -lh "$GITHUB_WORKSPACE/artifacts"
 
       - name: Publish release
@@ -152,14 +168,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eux
+          cd "$GITHUB_WORKSPACE/artifacts"
           IMG_NAME="lede-x86-64-generic-squashfs-combined-efi.img.gz"
-          IMG="$GITHUB_WORKSPACE/artifacts/$IMG_NAME"
-          SHA="$(sha256sum "$IMG" | cut -d' ' -f1)"
-          SIZE="$(du -h "$IMG" | cut -f1)"
+          SHA="$(sha256sum "$IMG_NAME" | cut -d' ' -f1)"
+          SIZE="$(du -h "$IMG_NAME" | cut -f1)"
           MANIFEST="$(ls "$GITHUB_WORKSPACE"/openwrt/bin/targets/x86/64/*.manifest | head -n1)"
           COUNT="$(wc -l < "$MANIFEST")"
           TAG="${{ steps.ver.outputs.tag }}"
           NOTES="$RUNNER_TEMP/notes.md"
+          shopt -s nullglob
+          FILES=("$IMG_NAME" ipk/*.ipk)
+          shopt -u nullglob
+          IPK_LIST="$(cd ipk 2>/dev/null && ls *.ipk | sort)"
           {
             echo "Lean LEDE x86-64 固件"
             echo
@@ -168,7 +188,7 @@ jobs:
             echo "| 源码 | \`coolsnowwolf/lede@${{ steps.src.outputs.sha }}\` |"
             echo "| 内核 | 6.18 LTS |"
             echo "| 包数 | ${COUNT} |"
-            echo "| 大小 | ${SIZE} |"
+            echo "| 镜像 | ${SIZE} |"
             echo "| SHA256 | \`${SHA}\` |"
             echo
             echo "含：WireGuard、SS Server、DDNS-GO、Passwall、OpenClash、TurboACC"
@@ -178,16 +198,24 @@ jobs:
             echo '刷机：`gunzip -c *.img.gz > fw.img && dd if=fw.img of=/dev/sdX bs=4M conv=fsync`'
             echo
             echo '首次启动：LAN `192.168.1.253`，root 密码 `password`，请立即修改。'
+            echo
+            echo "## 附带插件 ipk"
+            echo
+            echo '```'
+            echo "${IPK_LIST:-（无）}"
+            echo '```'
+            echo
+            echo '安装：`opkg install <name>.ipk`；依赖缺失时先装对应依赖包。'
           } > "$NOTES"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r a; do
               [ -z "$a" ] && continue
-              [ "$a" = "$IMG_NAME" ] || gh release delete-asset "$TAG" "$a" -y
+              gh release delete-asset "$TAG" "$a" -y || true
             done
-            gh release upload "$TAG" "$IMG" --clobber
+            gh release upload "$TAG" "${FILES[@]}" --clobber
             gh release edit "$TAG" --notes-file "$NOTES"
           else
-            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES" --latest "$IMG"
+            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES" --latest "${FILES[@]}"
           fi
           echo "released: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
 
