@@ -53,3 +53,20 @@ Workflow：`.github/workflows/build-firmware-latest.yml`
 分支：`firmware-build-latest`
 配置：`config.turboacc`
 Feeds：`feeds-latest.conf`
+
+## 分区尺寸（适配 1 GiB 磁盘）
+
+目标：镜像 raw 总大小 ≤ 1 GiB（1073741824 B），不删任何包。
+
+| 参数 | 值 |
+|---|---|
+| `CONFIG_TARGET_KERNEL_PARTSIZE` | 64 MiB |
+| `CONFIG_TARGET_ROOTFS_PARTSIZE` | 928 MiB |
+
+换算：`512 + 64*2048 + 928*2048 = 2,032,128` sectors = **992.2 MiB**，
+在 1 GiB 内留约 32 MiB 余量。
+
+根分区 928 MiB = SquashFS 约 147 MiB + overlay 约 781 MiB，功能与原来完全一致，只是 overlay 可用空间从约 877 MiB 降到约 781 MiB。
+
+> 不要用 960 MiB：`512 + 64*2048 + 960*2048 = 1,024.2 MiB`，仍超 1 GiB。
+
