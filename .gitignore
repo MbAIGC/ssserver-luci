@@ -9,3 +9,8 @@ files.txt
 .work/
 .lua/
 dist-apk/
+
+# 固件镜像与产物，不纳入版本管理
+*.img.gz
+*.img
+openwrt-*.gz

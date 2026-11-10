@@ -30,7 +30,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: firmware-build-latest
           fetch-depth: 1
 
       - name: Resolve version

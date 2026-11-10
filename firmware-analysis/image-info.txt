@@ -1,0 +1,57 @@
+== File ==
+openwrt-x86-64-generic-squashfs-combined-efi.img.gz
+size: 94,101,030 bytes
+decompressed: 537,165,312 bytes (512.28 MiB, 1,049,151 sectors)
+
+== SHA256 ==
+338d940f95d73815168113d5edde81f4e8be76c675e9f5c4f47349f80acd1b33  openwrt-x86-64-generic-squashfs-combined-efi.img.gz
+cf8a3b7720d4f56b2f4768f742f21d20b1ad099b8010218c60f1bd74397aae0e  fw.img
+
+== Partition table (fdisk) ==
+GPT PMBR size mismatch (1049119 != 1049150) will be corrected by write.
+The backup GPT table is corrupt, but the primary appears OK, so that will be used.
+The backup GPT table is not on the end of the device.
+Disk fw.img: 512.28 MiB, 537165312 bytes, 1049151 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+Disklabel type: gpt
+Disk identifier: A09FA0EE-8410-22EF-BC2D-11E18A98EF00
+
+Device      Start     End Sectors  Size Type
+fw.img1       512  131583  131072   64M Linux filesystem   (FAT16, label "kernel")
+fw.img2    131584 1049087  917504  448M Linux filesystem   (SquashFS + free space)
+fw.img128      34     511     478  239K BIOS boot
+
+Partition table entries are not in disk order.
+
+== SquashFS ==
+Found a valid SQUASHFS 4:0 superblock on p2.sqfs.
+Creation or last append time Thu Jun 18 02:00:17 2026
+Filesystem size 86679707 bytes (84648.15 Kbytes / 82.66 Mbytes)
+Compression xz
+	Dictionary size 262144
+	Filters selected: x86
+Block size 262144
+Filesystem is exportable via NFS
+Inodes are compressed
+Data is compressed
+Uids/Gids (Id table) are compressed
+Fragments are compressed
+Always-use-fragments option is not specified
+Xattrs are not stored
+Duplicates are removed
+Number of fragments 328
+Number of inodes 4351
+Number of ids 1
+
+== gzip trailer ==
+single gzip member; ISIZE = 537,165,312; CRC32 = 0xfd5a4e5a
+trailing 532 bytes = usign signature + ucert (not a second gzip member)
+  signed by key: 682ee5748b3abf0b
+  key comment:   "Local build key"
+  ucert valid:   2026-06-20 .. 2027-06-20 (UTC)
+
+== GPT note ==
+primary header alternate_lba = 1049120, but file has 1049151 sectors.
+backup GPT at LBA 1049120 is all zero -> backup table missing.
+After writing to a disk: sudo sgdisk -e /dev/sdX && sudo sgdisk -v /dev/sdX

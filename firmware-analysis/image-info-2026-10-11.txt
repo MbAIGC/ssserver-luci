@@ -1,0 +1,62 @@
+== File ==
+openwrt-x86-64-generic-squashfs-combined-efi.img (1).gz
+size: 116,111,466 bytes
+decompressed: 1,208,253,952 bytes (1.13 GiB, 2,359,871 sectors)
+
+== SHA256 ==
+6fc21d28284bea8788c727db1f3fef2bd7743567716e56d56f41cec740c23e10  openwrt-x86-64-generic-squashfs-combined-efi.img (1).gz
+767f30e5b2d05d6651cd4feb2262feb9968d4ab5a47937e899072bd13ef36867  decompressed image
+
+== Partition table (parsed GPT) ==
+GPT primary header: alternate_lba = 2,359,840
+actual file: 2,359,871 sectors; 31 zero sectors of padding
+GPT backup at LBA 2,359,840 is all zero -> backup table missing (same artifact as the 2026-06-18 image)
+
+index  start     end        sectors    size   type
+p1     512       262655     131072     64MiB  Linux filesystem (FAT16, label "kernel")
+p2     262656    2359807    2097152    1GiB   Linux filesystem (SquashFS + free space)
+(no p128 BIOS boot entry)
+
+== Boot partition p1 ==
+FAT16, label "kernel", volume serial 6ACB-2289
+/boot/vmlinuz                 6,673,408
+/boot/grub/boot.img                 512
+/boot/grub/core.img             153,623
+/boot/grub/grub.cfg                 530
+/efi/boot/bootx64.efi           634,880
+GRUB entry: LEDE, timeout 0
+kernel cmdline: root=PARTUUID=3efc5612-c26a-90ae-3057-5fb5c7888302 rootwait
+                console=tty0 console=ttyS0,115200n8 noinitrd swiotlb=65536
+
+== Kernel ==
+6.18.55 (runner@runnervmwvtoz) #0 SMP Sun Oct 11 05:45:45 2026
+
+== SquashFS ==
+Found a valid SQUASHFS 4:0 superblock.
+Creation or last append time Sun Oct 11 13:45:45 2026
+Filesystem size 107,787,661 bytes (102.79 MiB)
+Compression xz, dictionary 256KiB, x86 filter, block 256KiB
+Number of fragments 351
+Number of inodes 5054
+Number of ids 1
+
+== Signature trailer ==
+usign signature + ucert, key ec2763e7edb13cb5 ("Local build key")
+(validfrom/expiresat fields present; embedded certificate)
+
+== Software ==
+451 installed packages
+OpenWrt 24.10.5 / r8181-27d57f45e
+base-files 127-r8181-27d57f45e
+LuCI git-26.159.06565-3af75fc-1
+firewall3 2022-02-17-4cd7d4f3-3 (iptables; no fw4/nftables userland)
+kernel 6.18.55-1
+OpenClash 0.48.002 (core directory empty)
+Passwall 26.10.4-1
+shadowsocks-rust-ssserver / sslocal 1.25.0-3
+sing-box 1.14.3-1
+ttyd 1.6.3-3
+zerotier 1.16.0-1
+ksmbd-server 3.5.7-12
+miniupnpd-iptables 2.3.9-3
+nlbwmon
