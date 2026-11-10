@@ -99,6 +99,11 @@ jobs:
           sed -i 's#^PKG_RELEASE:=.*#PKG_RELEASE:=1#' package/luci-app-turboacc/Makefile
           find package/luci-app-turboacc -type f | sort
 
+      - name: Trim firmware
+        run: |
+          set -eux
+          "$GITHUB_WORKSPACE/firmware-build/trim-firmware.sh" openwrt
+
       - name: Apply ddns-go mix (Lean backend + sirpdboy LuCI)
         run: |
           set -eux
