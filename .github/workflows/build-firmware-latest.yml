@@ -151,10 +151,14 @@ jobs:
           grep -E 'CONFIG_PACKAGE_(luci-app-turboacc|kmod-nft-offload|kmod-wireguard|wireguard-tools|luci-proto-wireguard|ssserver-luci|luci-app-ddns-go|luci-app-passwall|luci-app-openclash)=' .config || true
 
       - name: Download sources
+        continue-on-error: true
         run: |
           set -eux
           cd openwrt
-          make download -j8
+          # 部分源（sourceware.org 等）很慢或无响应，单独限时，超时不阻断编译
+          # 编译阶段缺失的源码会按需重新下载
+          timeout 1800 make download -j8 \
+            || echo "== download 未在 30 分钟内完成，继续编译（按需下载）"
 
       - name: Build firmware
         run: |

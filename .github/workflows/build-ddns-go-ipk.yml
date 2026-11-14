@@ -109,7 +109,11 @@ jobs:
           cd openwrt
           # 只编包也必须先把 tools / toolchain 装好，否则 package/libs/toolchain
           # 在安装 libc 时会因为 staging_dir 里没有 ld-musl-*.so* 而失败
-          make tools/install -j"$(nproc)"
+          if ! make tools/install -j"$(nproc)"; then
+            echo "== tools 编译失败，用单线程重编 elfutils 以拿到完整错误 ==" >&2
+            make tools/elfutils/compile V=s -j1 2>&1 | tail -80 || true
+            exit 1
+          fi
           make toolchain/install -j"$(nproc)"
 
       - name: Build packages
