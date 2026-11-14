@@ -22,7 +22,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 150
 
     steps:
       - name: Checkout
@@ -114,11 +114,15 @@ jobs:
           cd openwrt
           # 只编包也必须先把 tools / toolchain 装好，否则 package/libs/toolchain
           # 在安装 libc 时会因为 staging_dir 里没有 ld-musl-*.so* 而失败
-          if ! make tools/install -j"$(nproc)"; then
-            echo "== tools 编译失败，用单线程重编 elfutils 以拿到完整错误 ==" >&2
-            make tools/elfutils/compile V=s -j1 2>&1 | tail -80 || true
-            exit 1
-          fi
+          # tools 并行编译存在偶发时序问题（elfutils 单独编能过），失败后单编 + 重试
+          ok=0
+          for attempt in 1 2 3; do
+            echo "== tools/install 第 ${attempt} 次尝试"
+            if make tools/install -j"$(nproc)"; then ok=1; break; fi
+            echo "== 失败，单线程补编 elfutils 后重试（已完成的目标会自动跳过）"
+            make tools/elfutils/compile V=s -j1 2>&1 | tail -40 || true
+          done
+          [ "${ok}" = "1" ] || { echo "tools/install 连续 3 次失败" >&2; exit 1; }
           make toolchain/install -j"$(nproc)"
 
       - name: Build packages
