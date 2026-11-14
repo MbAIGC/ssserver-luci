@@ -104,6 +104,11 @@ jobs:
           set -eux
           "$GITHUB_WORKSPACE/firmware-build/trim-firmware.sh" openwrt
 
+      - name: Speed up download (mirror first)
+        run: |
+          set -eux
+          "$GITHUB_WORKSPACE/firmware-build/speed-up-download.sh" openwrt
+
       - name: Apply ddns-go mix (Lean backend + sirpdboy LuCI)
         run: |
           set -eux

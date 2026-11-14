@@ -103,6 +103,11 @@ jobs:
           echo '== 选中项 =='
           grep -E 'CONFIG_PACKAGE_(ddns-go|luci-app-ddns-go|luci-i18n-ddns-go-zh-cn)=' .config
 
+      - name: Speed up download (mirror first)
+        run: |
+          set -eux
+          "$GITHUB_WORKSPACE/firmware-build/speed-up-download.sh" openwrt
+
       - name: Prepare toolchain
         run: |
           set -eux
