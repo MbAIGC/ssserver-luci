@@ -169,6 +169,15 @@ jobs:
         run: |
           set -eux
           cd openwrt
+          # tools 并行编译存在偶发时序问题（elfutils 单编能过），先单独编好并带重试
+          ok=0
+          for attempt in 1 2 3; do
+            echo "== tools/install 第 ${attempt} 次尝试"
+            if make tools/install -j"$(nproc)"; then ok=1; break; fi
+            echo "== 失败，单线程补编 elfutils 后重试"
+            make tools/elfutils/compile V=s -j1 2>&1 | tail -40 || true
+          done
+          [ "${ok}" = "1" ] || { echo "tools/install 连续 3 次失败" >&2; exit 1; }
           make -j"$(nproc)" V=s
 
       - name: Collect artifacts
