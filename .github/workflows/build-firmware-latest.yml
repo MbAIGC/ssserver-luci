@@ -191,7 +191,7 @@ jobs:
           # 顺带提取插件 ipk（找不到的自动跳过）
           set +e
           find openwrt/bin/packages -name '*.ipk' \
-            | grep -iE '/(luci-app-(openclash|passwall|ddns-go)|luci-i18n-|ssserver-luci|shadowsocks-rust-|ddns-go_|sing-box|chinadns-ng|dns2socks|microsocks|ipt2socks|simple-obfs-client|geoview|tcping)' \
+            | grep -iE '/(luci-app-(openclash|passwall|ddns-go)|luci-i18n-(base|passwall|ddns-go)-zh-cn|ssserver-luci|shadowsocks-rust-|ddns-go_|sing-box|chinadns-ng|dns2socks|microsocks|ipt2socks|simple-obfs-client|geoview|tcping)' \
             | while read -r f; do cp -f "$f" "$GITHUB_WORKSPACE/artifacts/ipk/"; done
           set -e
           echo '== ipk =='
