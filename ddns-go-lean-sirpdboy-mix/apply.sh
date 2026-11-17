@@ -79,6 +79,15 @@ cp -a "$LUCI_PKG_SRC/." "$OPENWRT_DIR/package/luci-app-ddns-go/"
 # 清掉 Lean 侧可能残留的 i18n 源，避免和 sirpdboy 的 po 打架
 rm -rf "$OPENWRT_DIR/feeds/luci/applications/luci-i18n-ddns-go-zh-cn" 2>/dev/null || true
 
+# 修复 i18n 包版本号
+# luci.mk 的 PKG_PO_VERSION 依赖 findrev（读 .git），源码复制到 package/ 后没有 .git，
+# 取不到版本就会生成 luci-i18n-xxx_0_all.ipk。这里显式指定。
+LUCI_MK="$OPENWRT_DIR/package/luci-app-ddns-go/Makefile"
+if [ -f "$LUCI_MK" ] && ! grep -q '^PKG_PO_VERSION' "$LUCI_MK"; then
+	sed -i '/^PKG_RELEASE:=/a PKG_PO_VERSION:=$(PKG_VERSION)-$(PKG_RELEASE)' "$LUCI_MK"
+	log "已为界面包补上 PKG_PO_VERSION（修正 i18n 版本号）"
+fi
+
 # ---------------------------------------------------------------- 3. 校验
 log "校验关键文件"
 for f in \
