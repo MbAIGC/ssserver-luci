@@ -88,7 +88,12 @@ jobs:
           cp "$GITHUB_WORKSPACE/$FEEDS_FILE" feeds.conf
           cat feeds.conf
           ./scripts/feeds update -a
+          # helloworld 的 shadowsocks-rust 没开 local-redir 特性，Passwall 的 SS
+          # 透明代理会不可用。移除它，让 passwall_packages 里的版本胜出。
+          rm -rf feeds/helloworld/shadowsocks-rust
           ./scripts/feeds install -a
+          echo '== shadowsocks-rust 来源确认 =='
+          ls -l package/feeds/*/shadowsocks-rust 2>/dev/null || echo "未找到"
 
       - name: Add local packages
         run: |
